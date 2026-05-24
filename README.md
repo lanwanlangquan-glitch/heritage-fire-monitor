@@ -32,6 +32,30 @@ python -m http.server 8088 --bind 127.0.0.1
 http://127.0.0.1:8088/index.html
 ```
 
+## 后端连接
+
+项目已经包含后端接口原型，支持硬件通过 HTTP POST 上传传感器数据，网页通过 API 和 SSE 实时刷新。
+
+启动 Python 后端：
+
+```powershell
+python backend/server.py
+```
+
+打开：
+
+```text
+http://127.0.0.1:3000
+```
+
+硬件上报接口：
+
+```text
+POST http://电脑局域网IP:3000/api/sensor-data
+```
+
+接口说明和 ESP32 示例见 `HARDWARE_API.md`。
+
 ## 推荐部署
 
 推荐使用 Cloudflare Pages：
@@ -42,4 +66,3 @@ http://127.0.0.1:8088/index.html
 - 部署目录：本项目根目录
 
 上线后可以先使用 `*.pages.dev` 免费公网网址，再绑定正式域名。
-

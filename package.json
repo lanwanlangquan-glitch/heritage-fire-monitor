@@ -1,0 +1,10 @@
+{
+  "name": "heritage-fire-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "古建筑智慧消防与电气安全监测系统网站与后端接口原型",
+  "scripts": {
+    "start": "node backend/server.js",
+    "start:python": "python backend/server.py"
+  }
+}

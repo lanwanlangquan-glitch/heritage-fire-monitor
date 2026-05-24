@@ -59,3 +59,22 @@ zhaoyuhui-fire.cn
 
 如果使用 `.cn` 域名并希望放在国内云服务器，通常需要备案。大创展示阶段建议先用 Cloudflare Pages 免费网址，后续项目名称确定后再购买正式域名。
 
+## 后端部署提醒
+
+GitHub Pages 和 Cloudflare Pages 都适合部署前端静态页面，不能长期运行 Python/Node 后端。硬件实时数据需要另行部署后端，推荐：
+
+```text
+Cloudflare Workers
+Render
+Railway
+阿里云/腾讯云轻量服务器
+学校实验室服务器
+```
+
+如果只是答辩演示，可以在电脑上运行：
+
+```powershell
+python backend/server.py
+```
+
+然后让 ESP32 向电脑局域网 IP 的 `3000` 端口上报。
