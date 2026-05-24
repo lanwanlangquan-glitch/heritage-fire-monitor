@@ -6,14 +6,26 @@ const { URL } = require("url");
 const port = Number(process.env.PORT || 3000);
 const rootDir = path.resolve(__dirname, "..");
 const clients = new Set();
-
 const devices = new Map();
 
+const text = {
+  high: "\u9ad8\u98ce\u9669",
+  watch: "\u5173\u6ce8",
+  normal: "\u6b63\u5e38",
+  noTicketsTitle: "\u5f53\u524d\u65e0\u5f85\u5904\u7406\u544a\u8b66",
+  noTicketsDesc: "\u6240\u6709\u5728\u7ebf\u76d1\u6d4b\u8282\u70b9\u5904\u4e8e\u6b63\u5e38\u8303\u56f4\u3002",
+  highAlert: "\u9ad8\u98ce\u9669\u544a\u8b66",
+  watchAlert: "\u9700\u8981\u5173\u6ce8",
+  risk: "\u98ce\u9669",
+  inspectNow: "\u8bf7\u7acb\u5373\u5de1\u68c0\u7ebf\u7f06\u6e29\u5ea6\u3001\u6f0f\u7535\u6d41\u548c\u70df\u96fe\u72b6\u6001\u3002",
+  inspectSoon: "\u5efa\u8bae\u63d0\u9ad8\u5de1\u68c0\u9891\u7387\u5e76\u6838\u67e5\u8bbe\u5907\u72b6\u6001\u3002",
+};
+
 const defaultDevices = [
-  ["D-A01", "大雄宝殿配电箱 A 区"],
-  ["D-B02", "藏经阁梁柱节点"],
-  ["D-C03", "库房环境节点"],
-  ["D-D04", "游客区无线节点"],
+  ["D-A01", "\u5927\u96c4\u5b9d\u6bbf\u914d\u7535\u7bb1 A \u533a"],
+  ["D-B02", "\u85cf\u7ecf\u9601\u6881\u67f1\u8282\u70b9"],
+  ["D-C03", "\u5e93\u623f\u73af\u5883\u8282\u70b9"],
+  ["D-D04", "\u6e38\u5ba2\u533a\u65e0\u7ebf\u8282\u70b9"],
 ];
 
 for (const [id, name] of defaultDevices) {
@@ -37,9 +49,9 @@ function calculateRisk(values) {
 }
 
 function statusFromRisk(risk) {
-  if (risk >= 75) return "高风险";
-  if (risk >= 45) return "关注";
-  return "正常";
+  if (risk >= 75) return text.high;
+  if (risk >= 45) return text.watch;
+  return text.normal;
 }
 
 function normalizeReading(payload) {
@@ -73,23 +85,19 @@ function buildTickets() {
     if (device.risk >= 75) {
       list.push({
         level: "danger",
-        title: `${device.name} 高风险告警`,
-        desc: `风险 ${device.risk}，请立即巡检线缆温度、漏电流和烟雾状态。`,
+        title: `${device.name} ${text.highAlert}`,
+        desc: `${text.risk} ${device.risk}\uff0c${text.inspectNow}`,
       });
     } else if (device.risk >= 45) {
       list.push({
         level: "warning",
-        title: `${device.name} 需要关注`,
-        desc: `风险 ${device.risk}，建议提高巡检频率并核查设备状态。`,
+        title: `${device.name} ${text.watchAlert}`,
+        desc: `${text.risk} ${device.risk}\uff0c${text.inspectSoon}`,
       });
     }
   }
   if (!list.length) {
-    list.push({
-      level: "normal",
-      title: "当前无待处理告警",
-      desc: "所有在线监测节点处于正常范围。",
-    });
+    list.push({ level: "normal", title: text.noTicketsTitle, desc: text.noTicketsDesc });
   }
   return list.slice(0, 6);
 }
