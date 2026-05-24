@@ -78,3 +78,37 @@ python backend/server.py
 ```
 
 然后让 ESP32 向电脑局域网 IP 的 `3000` 端口上报。
+
+## Render backend deployment
+
+The repository contains `render.yaml`, so Render can deploy the Node backend directly from GitHub.
+
+Recommended path:
+
+1. Open `https://dashboard.render.com/` in a normal browser.
+2. Sign in with GitHub.
+3. Choose `New` -> `Blueprint`.
+4. Select repository `lanwanlangquan-glitch/heritage-fire-monitor`.
+5. Render will read `render.yaml`.
+6. Service name: `heritage-fire-monitor`.
+7. Runtime: `node`.
+8. Build command: `npm install`.
+9. Start command: `npm start`.
+10. Health check path: `/api/health`.
+11. Deploy.
+
+After deployment, test:
+
+```text
+https://YOUR-RENDER-SERVICE.onrender.com/api/health
+```
+
+Then update `config.js`:
+
+```js
+window.APP_CONFIG = {
+  apiBaseUrl: "https://YOUR-RENDER-SERVICE.onrender.com",
+};
+```
+
+Commit and push. GitHub Pages will then connect to the deployed backend.
