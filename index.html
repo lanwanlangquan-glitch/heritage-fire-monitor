@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="古建筑智慧消防与电气安全监测系统，提供硬件传感、云平台监控、风险预警和移动巡检闭环。" />
+    <title>古建安澜 | 古建筑智慧消防与电气安全监测系统</title>
+    <link rel="manifest" href="site.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#overview" aria-label="赵玉辉大帅哥 首页">
+        <span class="brand-mark">安</span>
+        <span>
+          <strong>赵玉辉大帅哥</strong>
+          <small>Heritage Fire IoT</small>
+        </span>
+      </a>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="#overview">监控总览</a>
+        <a href="#hardware">硬件层</a>
+        <a href="#platform">平台层</a>
+        <a href="#app">App层</a>
+        <a href="#patent">专利方向</a>
+      </nav>
+      <button class="icon-button" id="simulateAlarm" type="button" aria-label="模拟告警">
+        <span aria-hidden="true">!</span>
+      </button>
+    </header>
+
+    <main>
+      <section class="hero" id="overview" aria-labelledby="heroTitle">
+        <img src="assets/images/ancient-fire-hero.png" alt="古建筑内布设智慧消防传感器的产品场景图" />
+        <div class="hero-shade"></div>
+        <div class="hero-content">
+          <p class="eyebrow">硬件 - 云平台 - App 一体化原型</p>
+          <h1 id="heroTitle">古建筑智慧消防与电气安全监测系统</h1>
+          <p class="hero-copy">以非破坏式传感节点监测温湿度、烟雾、线缆温升、漏电与用电负载，通过风险评分和工单闭环，把隐患处理提前到火情之前。</p>
+          <div class="hero-actions">
+            <a class="primary-action" href="#dashboard">查看监控台</a>
+            <a class="secondary-action" href="#hardware">查看硬件方案</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="dashboard-shell" id="dashboard" aria-label="实时监控台">
+        <aside class="site-panel">
+          <div class="panel-head">
+            <span>监测点位</span>
+            <button class="tiny-button" id="refreshData" type="button">刷新</button>
+          </div>
+          <div class="device-list" id="deviceList"></div>
+        </aside>
+
+        <section class="live-panel" aria-labelledby="dashboardTitle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">实时监测</p>
+              <h2 id="dashboardTitle">大雄宝殿配电箱 A 区</h2>
+            </div>
+            <div class="risk-pill" id="riskPill">风险评估中</div>
+          </div>
+
+          <div class="metrics-grid" id="metricsGrid"></div>
+
+          <div class="split-layout">
+            <div class="map-panel">
+              <div class="map-title">
+                <span>古建筑点位图</span>
+                <strong id="mapStatus">4 个在线节点</strong>
+              </div>
+              <div class="site-map" aria-label="古建筑监测点位示意图">
+                <span class="beam beam-a"></span>
+                <span class="beam beam-b"></span>
+                <button class="map-node normal" style="--x: 20%; --y: 64%" aria-label="库房温湿度节点"></button>
+                <button class="map-node warning" style="--x: 51%; --y: 42%" aria-label="梁柱烟雾节点"></button>
+                <button class="map-node danger" style="--x: 73%; --y: 67%" aria-label="配电箱电气节点"></button>
+                <button class="map-node normal" style="--x: 36%; --y: 24%" aria-label="游客区环境节点"></button>
+              </div>
+            </div>
+
+            <div class="alarm-panel">
+              <div class="map-title">
+                <span>告警工单</span>
+                <strong id="ticketCount">2 条待处理</strong>
+              </div>
+              <div class="ticket-list" id="ticketList"></div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="section-band" id="hardware">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Hardware Layer</p>
+            <h2>硬件层：非破坏式多传感节点</h2>
+          </div>
+          <p class="section-note">先从配电箱与老旧线路监测节点做 MVP，再扩展到梁柱、库房和香火区。</p>
+        </div>
+        <div class="hardware-flow">
+          <article>
+            <span class="step-index">01</span>
+            <h3>环境监测节点</h3>
+            <p>SHT31 温湿度、烟雾/可燃气体、火焰探测，适合梁柱、库房、游客区。</p>
+          </article>
+          <article>
+            <span class="step-index">02</span>
+            <h3>电气安全节点</h3>
+            <p>DS18B20 线缆温度、SCT-013 电流互感器、漏电流检测，适合配电箱和线路端子。</p>
+          </article>
+          <article>
+            <span class="step-index">03</span>
+            <h3>边缘采集终端</h3>
+            <p>ESP32/STM32 采集、阈值判断、断网缓存、低功耗采样，异常时提高采样频率。</p>
+          </article>
+          <article>
+            <span class="step-index">04</span>
+            <h3>无线通信</h3>
+            <p>Wi-Fi 用于实验原型，LoRa/NB-IoT 用于真实古建筑场景，减少布线破坏。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-band platform-band" id="platform">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Cloud Platform</p>
+            <h2>平台层：数据接入、风险评分与告警闭环</h2>
+          </div>
+        </div>
+        <div class="pipeline">
+          <div>MQTT 接入</div>
+          <div>设备认证</div>
+          <div>时序存储</div>
+          <div>规则引擎</div>
+          <div>风险评分</div>
+          <div>告警工单</div>
+        </div>
+        <div class="knowledge-grid">
+          <article>
+            <h3>核心算法</h3>
+            <p>单点阈值、温升速率、组合异常、电气负载趋势共同参与评分，避免单传感器误报。</p>
+          </article>
+          <article>
+            <h3>数据格式</h3>
+            <p>设备按 JSON 上报 deviceId、location、temperature、humidity、cableTemp、current、leakage、smoke。</p>
+          </article>
+          <article>
+            <h3>运维能力</h3>
+            <p>在线率、电量、信号强度、固件版本、安装点位和巡检记录统一管理。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-band" id="app">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">App Layer</p>
+            <h2>App层：移动巡检与应急联动</h2>
+          </div>
+        </div>
+        <div class="app-layout">
+          <div class="phone-frame">
+            <div class="phone-screen">
+              <div class="phone-status">大雄宝殿 A 区</div>
+              <div class="phone-risk">高风险 82</div>
+              <div class="phone-row"><span>线缆温度</span><strong>68.4°C</strong></div>
+              <div class="phone-row"><span>漏电流</span><strong>31mA</strong></div>
+              <div class="phone-row"><span>烟雾浓度</span><strong>偏高</strong></div>
+              <button type="button">派发巡检工单</button>
+            </div>
+          </div>
+          <div class="app-copy">
+            <h3>从告警到归档</h3>
+            <p>App 负责把平台判断结果变成现场动作：接收推送、确认位置、拍照处理、复查关闭、自动生成月度隐患报告。</p>
+            <div class="app-steps">
+              <span>告警推送</span>
+              <span>人员确认</span>
+              <span>现场处置</span>
+              <span>复查归档</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-band patent-band" id="patent">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Patent Focus</p>
+            <h2>可申请专利的切入点</h2>
+          </div>
+        </div>
+        <div class="patent-list">
+          <article>
+            <h3>非破坏式安装结构</h3>
+            <p>卡扣、绑带、磁吸和可拆探头结构，适配梁柱、配电箱、木构件，不破坏古建筑表面。</p>
+          </article>
+          <article>
+            <h3>古建筑电气火灾组合预警方法</h3>
+            <p>线缆温升、负载波动、漏电流、烟雾与环境干燥度联合判断，形成分级预警。</p>
+          </article>
+          <article>
+            <h3>低功耗自适应采样机制</h3>
+            <p>正常状态低频采样，疑似异常提高采样频率，断网缓存并恢复补传。</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

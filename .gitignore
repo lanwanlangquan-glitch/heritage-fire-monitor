@@ -1,0 +1,4 @@
+*.zip
+.deploy-check/
+.DS_Store
+Thumbs.db
