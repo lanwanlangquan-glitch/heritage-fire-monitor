@@ -1,4 +1,6 @@
 *.zip
 .deploy-check/
+backend/data/
+server-deploy-screenshot.png
 .DS_Store
 Thumbs.db

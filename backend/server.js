@@ -5,8 +5,12 @@ const { URL } = require("url");
 
 const port = Number(process.env.PORT || 3000);
 const rootDir = path.resolve(__dirname, "..");
+const dataDir = path.join(__dirname, "data");
 const clients = new Set();
 const devices = new Map();
+const analyticsTimeZone = process.env.ANALYTICS_TIMEZONE || "Asia/Shanghai";
+
+fs.mkdirSync(dataDir, { recursive: true });
 
 const text = {
   high: "\u9ad8\u98ce\u9669",
@@ -76,6 +80,192 @@ function normalizeReading(payload) {
     risk,
     updatedAt: new Date().toISOString(),
     values,
+  };
+}
+
+function formatDateKey(dateInput = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: analyticsTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(dateInput));
+}
+
+function formatHourKey(dateInput = new Date()) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: analyticsTimeZone,
+    hour: "2-digit",
+    hour12: false,
+  }).format(new Date(dateInput));
+}
+
+function historyFilePath(dateKey) {
+  return path.join(dataDir, `history-${dateKey}.jsonl`);
+}
+
+function persistReading(reading) {
+  const record = {
+    timestamp: reading.updatedAt,
+    deviceId: reading.id,
+    name: reading.name,
+    risk: reading.risk,
+    status: reading.status,
+    values: reading.values,
+  };
+  const targetFile = historyFilePath(formatDateKey(reading.updatedAt));
+  fs.appendFile(targetFile, `${JSON.stringify(record)}\n`, (error) => {
+    if (error) {
+      console.error("Failed to persist sensor reading", error);
+    }
+  });
+}
+
+function readHistory(dateKey) {
+  const targetFile = historyFilePath(dateKey);
+  if (!fs.existsSync(targetFile)) return [];
+  return fs
+    .readFileSync(targetFile, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch (error) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function listHistoryDates() {
+  return fs
+    .readdirSync(dataDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /^history-\d{4}-\d{2}-\d{2}\.jsonl$/.test(entry.name))
+    .map((entry) => entry.name.replace(/^history-/, "").replace(/\.jsonl$/, ""));
+}
+
+function average(values) {
+  if (!values.length) return 0;
+  const total = values.reduce((sum, item) => sum + Number(item || 0), 0);
+  return Number((total / values.length).toFixed(1));
+}
+
+function computeInsights(records, hourly, metricSummary) {
+  const insights = [];
+  const alertRecords = records.filter((record) => Number(record.risk || 0) >= 75);
+  const maxCable = metricSummary.find((metric) => metric.key === "cableTemp")?.max || 0;
+  const avgHumidity = metricSummary.find((metric) => metric.key === "humidity")?.avg || 0;
+  const maxSmoke = metricSummary.find((metric) => metric.key === "smoke")?.max || 0;
+  const peakHour = [...hourly]
+    .filter((hour) => hour.sampleCount > 0)
+    .sort((a, b) => Number(b.risk || 0) - Number(a.risk || 0))[0];
+
+  if (alertRecords.length) {
+    insights.push(`\u5f53\u65e5\u51fa\u73b0 ${alertRecords.length} \u6b21\u9ad8\u98ce\u9669\u6837\u672c\uff0c\u9700\u8981\u590d\u67e5\u5bf9\u5e94\u65f6\u6bb5\u7684\u7535\u6c14\u4e0e\u70df\u96fe\u60c5\u51b5\u3002`);
+  }
+  if (maxCable >= 60) {
+    insights.push(`\u7ebf\u7f06\u6e29\u5ea6\u5f53\u65e5\u5cf0\u503c ${maxCable}\u00b0C\uff0c\u5df2\u8fbe\u5230\u9884\u8b66\u9608\u503c\uff0c\u5efa\u8bae\u68c0\u67e5\u63a5\u7ebf\u7aef\u5b50\u4e0e\u8d1f\u8f7d\u3002`);
+  }
+  if (avgHumidity > 0 && avgHumidity <= 28) {
+    insights.push(`\u5f53\u65e5\u5e73\u5747\u6e7f\u5ea6 ${avgHumidity}%\uff0c\u6728\u7ed3\u6784\u5e72\u71e5\u98ce\u9669\u504f\u9ad8\uff0c\u53ef\u63d0\u9ad8\u5de1\u68c0\u9891\u7387\u3002`);
+  }
+  if (maxSmoke >= 300) {
+    insights.push(`\u70df\u96fe\u503c\u6700\u9ad8\u8fbe\u5230 ${maxSmoke}\uff0c\u5efa\u8bae\u56de\u770b\u8be5\u65f6\u6bb5\u7684\u73af\u5883\u6216\u6d4b\u8bd5\u8bb0\u5f55\u3002`);
+  }
+  if (peakHour) {
+    insights.push(`\u98ce\u9669\u6700\u9ad8\u65f6\u6bb5\u51fa\u73b0\u5728 ${peakHour.label}\uff0c\u5f53\u65f6\u5e73\u5747\u98ce\u9669\u5206 ${peakHour.risk}\u3002`);
+  }
+  if (!insights.length) {
+    insights.push(`\u5f53\u65e5\u672a\u53d1\u73b0\u660e\u663e\u5f02\u5e38\uff0c\u7cfb\u7edf\u8fd0\u884c\u6570\u636e\u603b\u4f53\u5e73\u7a33\u3002`);
+  }
+  return insights.slice(0, 4);
+}
+
+function buildDailyAnalytics(records, dateKey, requestedDeviceId = "") {
+  const filtered = requestedDeviceId ? records.filter((record) => record.deviceId === requestedDeviceId) : records;
+  const hourlyBuckets = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    label: `${String(hour).padStart(2, "0")}:00`,
+    sampleCount: 0,
+    risk: 0,
+    temperature: 0,
+    humidity: 0,
+    cableTemp: 0,
+    current: 0,
+    leakage: 0,
+    smoke: 0,
+  }));
+
+  const totals = {
+    sampleCount: filtered.length,
+    alertCount: filtered.filter((record) => Number(record.risk || 0) >= 75).length,
+    avgRisk: average(filtered.map((record) => record.risk)),
+    maxRisk: filtered.reduce((max, record) => Math.max(max, Number(record.risk || 0)), 0),
+    deviceCount: new Set(filtered.map((record) => record.deviceId)).size,
+  };
+
+  filtered.forEach((record) => {
+    const hour = Number(formatHourKey(record.timestamp));
+    const bucket = hourlyBuckets[hour];
+    if (!bucket) return;
+    bucket.sampleCount += 1;
+    bucket.risk += Number(record.risk || 0);
+    bucket.temperature += Number(record.values?.temperature || 0);
+    bucket.humidity += Number(record.values?.humidity || 0);
+    bucket.cableTemp += Number(record.values?.cableTemp || 0);
+    bucket.current += Number(record.values?.current || 0);
+    bucket.leakage += Number(record.values?.leakage || 0);
+    bucket.smoke += Number(record.values?.smoke || 0);
+  });
+
+  const hourly = hourlyBuckets.map((bucket) => {
+    if (!bucket.sampleCount) return bucket;
+    return {
+      ...bucket,
+      risk: Number((bucket.risk / bucket.sampleCount).toFixed(1)),
+      temperature: Number((bucket.temperature / bucket.sampleCount).toFixed(1)),
+      humidity: Number((bucket.humidity / bucket.sampleCount).toFixed(1)),
+      cableTemp: Number((bucket.cableTemp / bucket.sampleCount).toFixed(1)),
+      current: Number((bucket.current / bucket.sampleCount).toFixed(1)),
+      leakage: Number((bucket.leakage / bucket.sampleCount).toFixed(1)),
+      smoke: Number((bucket.smoke / bucket.sampleCount).toFixed(1)),
+    };
+  });
+
+  const metrics = [
+    ["temperature", "\u73af\u5883\u6e29\u5ea6", "\u00b0C"],
+    ["humidity", "\u76f8\u5bf9\u6e7f\u5ea6", "%"],
+    ["cableTemp", "\u7ebf\u7f06\u6e29\u5ea6", "\u00b0C"],
+    ["current", "\u8d1f\u8f7d\u7535\u6d41", "A"],
+    ["leakage", "\u6f0f\u7535\u7535\u6d41", "mA"],
+    ["smoke", "\u70df\u96fe\u503c", "ppm"],
+  ].map(([key, label, unit]) => {
+    const values = filtered.map((record) => Number(record.values?.[key] || 0));
+    return {
+      key,
+      label,
+      unit,
+      min: values.length ? Number(Math.min(...values).toFixed(1)) : 0,
+      avg: average(values),
+      max: values.length ? Number(Math.max(...values).toFixed(1)) : 0,
+    };
+  });
+
+  const scope = requestedDeviceId
+    ? devices.get(requestedDeviceId)
+      ? { deviceId: requestedDeviceId, name: devices.get(requestedDeviceId).name }
+      : { deviceId: requestedDeviceId, name: requestedDeviceId }
+    : { deviceId: "", name: "\u5168\u90e8\u8bbe\u5907" };
+
+  return {
+    date: dateKey,
+    scope,
+    totals,
+    metrics,
+    hourly,
+    insights: computeInsights(filtered, hourly, metrics),
   };
 }
 
@@ -153,6 +343,7 @@ function mimeType(filePath) {
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
     ".webmanifest": "application/manifest+json; charset=utf-8",
     ".txt": "text/plain; charset=utf-8",
     ".xml": "application/xml; charset=utf-8",
@@ -173,7 +364,8 @@ function serveStatic(req, res, pathname) {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { "Content-Type": mimeType(filePath) });
+    const cacheHeader = pathname.startsWith("/assets/") ? "public, max-age=604800" : "no-cache";
+    res.writeHead(200, { "Content-Type": mimeType(filePath), "Cache-Control": cacheHeader });
     res.end(content);
   });
 }
@@ -201,6 +393,19 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/analytics/dates") {
+    sendJson(res, 200, { dates: listHistoryDates().sort().reverse() });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/analytics/daily") {
+    const requestedDate = String(url.searchParams.get("date") || formatDateKey());
+    const requestedDeviceId = String(url.searchParams.get("deviceId") || "");
+    const records = readHistory(requestedDate);
+    sendJson(res, 200, buildDailyAnalytics(records, requestedDate, requestedDeviceId));
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/events") {
     res.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
@@ -220,6 +425,7 @@ const server = http.createServer(async (req, res) => {
       const payload = JSON.parse(body || "{}");
       const reading = normalizeReading(payload);
       devices.set(reading.id, reading);
+      persistReading(reading);
       const state = snapshot();
       broadcast("sensor-update", state);
       sendJson(res, 200, { ok: true, device: reading, tickets: state.tickets });

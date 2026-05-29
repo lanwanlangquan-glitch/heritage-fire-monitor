@@ -6,6 +6,7 @@
     <meta name="description" content="Heritage building smart fire safety and electrical monitoring system." />
     <title>&#x53e4;&#x5efa;&#x5b89;&#x6f9c; | &#x53e4;&#x5efa;&#x7b51;&#x667a;&#x6167;&#x6d88;&#x9632;&#x4e0e;&#x7535;&#x6c14;&#x5b89;&#x5168;&#x76d1;&#x6d4b;&#x7cfb;&#x7edf;</title>
     <link rel="manifest" href="site.webmanifest" />
+    <link rel="preload" as="image" href="assets/images/ancient-fire-hero.webp" type="image/webp" fetchpriority="high" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -19,6 +20,7 @@
       </a>
       <nav class="nav-links" aria-label="Main navigation">
         <a href="#overview">&#x76d1;&#x63a7;&#x603b;&#x89c8;</a>
+        <a href="#analytics">&#x65e5;&#x62a5;&#x5206;&#x6790;</a>
         <a href="#hardware">&#x786c;&#x4ef6;&#x5c42;</a>
         <a href="#platform">&#x5e73;&#x53f0;&#x5c42;</a>
         <a href="#app">App&#x5c42;</a>
@@ -31,7 +33,10 @@
 
     <main>
       <section class="hero" id="overview" aria-labelledby="heroTitle">
-        <img src="assets/images/ancient-fire-hero.png" alt="Heritage fire safety IoT product scene" />
+        <picture>
+          <source srcset="assets/images/ancient-fire-hero.webp" type="image/webp" />
+          <img class="hero-image" src="assets/images/ancient-fire-hero.png" width="1500" height="800" alt="Heritage fire safety IoT product scene" fetchpriority="high" decoding="async" />
+        </picture>
         <div class="hero-shade"></div>
         <div class="hero-content">
           <p class="eyebrow">Hardware - Cloud Platform - App</p>
@@ -62,6 +67,14 @@
             <div class="risk-pill" id="riskPill">&#x98ce;&#x9669;&#x8bc4;&#x4f30;&#x4e2d;</div>
           </div>
 
+          <div class="status-strip" aria-live="polite">
+            <span class="status-dot" id="connectionDot"></span>
+            <strong id="connectionState">&#x6b63;&#x5728;&#x8fde;&#x63a5;&#x540e;&#x7aef;</strong>
+            <span id="lastSync">&#x7b49;&#x5f85;&#x6570;&#x636e;&#x540c;&#x6b65;</span>
+          </div>
+
+          <div class="summary-grid" id="summaryGrid"></div>
+
           <div class="metrics-grid" id="metricsGrid"></div>
 
           <div class="split-layout">
@@ -86,9 +99,78 @@
                 <strong id="ticketCount">Realtime</strong>
               </div>
               <div class="ticket-list" id="ticketList"></div>
+              <div class="action-row">
+                <button class="ghost-button" id="ackAllTickets" type="button">&#x672c;&#x5730;&#x786e;&#x8ba4;</button>
+                <button class="solid-button" id="testCloudAlarm" type="button">&#x4e0a;&#x62a5;&#x6d4b;&#x8bd5;&#x544a;&#x8b66;</button>
+              </div>
+            </div>
+
+            <div class="risk-panel">
+              <div class="map-title">
+                <span>&#x98ce;&#x9669;&#x6392;&#x540d;</span>
+                <strong id="riskRankStatus">Risk score</strong>
+              </div>
+              <div class="risk-bars" id="riskBars"></div>
             </div>
           </div>
         </section>
+      </section>
+
+      <section class="section-band analytics-band" id="analytics">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Daily Analytics</p>
+            <h2>&#x6bcf;&#x65e5;&#x6570;&#x636e;&#x6574;&#x7406;&#x4e0e;&#x81ea;&#x52a8;&#x5206;&#x6790;</h2>
+          </div>
+          <div class="analytics-controls">
+            <label class="analytics-label" for="analyticsDate">&#x65e5;&#x671f;</label>
+            <input id="analyticsDate" class="analytics-input" type="date" />
+            <button class="tiny-button" id="refreshAnalytics" type="button">&#x5237;&#x65b0;&#x65e5;&#x62a5;</button>
+          </div>
+        </div>
+
+        <div class="analytics-grid">
+          <section class="analytics-panel">
+            <div class="map-title">
+              <span id="analyticsScope">&#x5f53;&#x524d;&#x8bbe;&#x5907;&#x65e5;&#x62a5;</span>
+              <strong id="analyticsStatus">Daily report</strong>
+            </div>
+            <div class="summary-grid analytics-summary" id="analyticsSummary"></div>
+            <div class="chart-stack">
+              <article class="chart-card">
+                <div class="chart-head">
+                  <span>&#x98ce;&#x9669;&#x4e0e;&#x7ebf;&#x7f06;&#x6e29;&#x5ea6;&#x8d8b;&#x52bf;</span>
+                  <strong id="trendStatus">24h</strong>
+                </div>
+                <div id="trendChart" class="chart-surface" aria-label="Daily risk and cable temperature trend"></div>
+              </article>
+              <article class="chart-card">
+                <div class="chart-head">
+                  <span>&#x5c0f;&#x65f6;&#x91c7;&#x6837;&#x4e0e;&#x70df;&#x96fe;&#x6ce2;&#x52a8;</span>
+                  <strong id="volumeStatus">Hourly</strong>
+                </div>
+                <div id="volumeChart" class="chart-surface" aria-label="Hourly sample and smoke trend"></div>
+              </article>
+            </div>
+          </section>
+
+          <aside class="analytics-side">
+            <article class="analytics-panel compact">
+              <div class="map-title">
+                <span>&#x5173;&#x952e;&#x6307;&#x6807;</span>
+                <strong id="metricStatus">Metrics</strong>
+              </div>
+              <div id="analyticsMetrics" class="analytics-metrics"></div>
+            </article>
+            <article class="analytics-panel compact">
+              <div class="map-title">
+                <span>&#x81ea;&#x52a8;&#x5206;&#x6790;&#x7ed3;&#x8bba;</span>
+                <strong id="insightStatus">Insights</strong>
+              </div>
+              <div id="analyticsInsights" class="analytics-insights"></div>
+            </article>
+          </aside>
+        </div>
       </section>
 
       <section class="section-band" id="hardware">

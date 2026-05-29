@@ -4,12 +4,38 @@ const labels = {
   normal: "\u6b63\u5e38",
   backendOnline: "\u771f\u5b9e\u540e\u7aef\u5728\u7ebf",
   demoMode: "\u6f14\u793a\u6570\u636e\u6a21\u5f0f",
+  backendOffline: "\u540e\u7aef\u672a\u8fde\u63a5\uff0c\u5df2\u5207\u6362\u6f14\u793a\u6570\u636e",
+  connecting: "\u6b63\u5728\u8fde\u63a5\u540e\u7aef",
+  synced: "\u5df2\u540c\u6b65",
+  waiting: "\u7b49\u5f85\u6570\u636e\u540c\u6b65",
+  onlineNodes: "\u5728\u7ebf\u8282\u70b9",
+  highRiskNodes: "\u9ad8\u98ce\u9669\u70b9",
+  avgRisk: "\u5e73\u5747\u98ce\u9669",
+  lastUpdate: "\u6700\u8fd1\u540c\u6b65",
+  pendingTickets: "\u5f85\u5904\u7406",
+  rankReady: "\u5df2\u6309\u98ce\u9669\u6392\u5e8f",
+  allDevices: "\u5168\u90e8\u8bbe\u5907\u65e5\u62a5",
+  analyticsReady: "\u65e5\u62a5\u5df2\u751f\u6210",
+  analyticsDemo: "\u6682\u7528\u5b9e\u65f6\u6570\u636e\u751f\u6210\u9884\u89c8",
+  noSamples: "\u5f53\u65e5\u6682\u65e0\u5386\u53f2\u6837\u672c",
+  samples: "\u91c7\u6837\u6570",
+  alertCount: "\u9ad8\u98ce\u9669\u6b21\u6570",
+  maxRisk: "\u6700\u9ad8\u98ce\u9669",
+  deviceCount: "\u8986\u76d6\u8bbe\u5907",
+  avg: "\u5e73\u5747",
+  min: "\u6700\u5c0f",
+  max: "\u6700\u5927",
+  generatedFromLive: "\u5df2\u7528\u5f53\u524d\u5b9e\u65f6\u6570\u636e\u751f\u6210\u9884\u89c8\u62a5\u544a\u3002",
+  localAckTitle: "\u672c\u5730\u544a\u8b66\u5df2\u786e\u8ba4",
+  localAckDesc: "\u9875\u9762\u5df2\u6682\u65f6\u6536\u8d77\u544a\u8b66\uff0c\u771f\u5b9e\u540e\u7aef\u6570\u636e\u4e0b\u6b21\u540c\u6b65\u540e\u4f1a\u6062\u590d\u3002",
+  cloudTestLocal: "\u5df2\u5728\u672c\u5730\u751f\u6210\u6d4b\u8bd5\u544a\u8b66",
   threshold: "\u8d85\u8fc7\u9884\u8b66\u9608\u503c",
   stable: "\u8fd0\u884c\u7a33\u5b9a",
   deviceA: "\u5927\u96c4\u5b9d\u6bbf\u914d\u7535\u7bb1 A \u533a",
   deviceB: "\u85cf\u7ecf\u9601\u6881\u67f1\u8282\u70b9",
   deviceC: "\u5e93\u623f\u73af\u5883\u8282\u70b9",
   deviceD: "\u6e38\u5ba2\u533a\u65e0\u7ebf\u8282\u70b9",
+  testDevice: "\u4e91\u7aef\u6d4b\u8bd5\u8282\u70b9",
   temp: "\u73af\u5883\u6e29\u5ea6",
   humidity: "\u76f8\u5bf9\u6e7f\u5ea6",
   cableTemp: "\u7ebf\u7f06\u6e29\u5ea6",
@@ -77,6 +103,8 @@ let tickets = JSON.parse(JSON.stringify(demoTickets));
 let selectedDevice = 0;
 let alarmMode = false;
 let backendConnected = false;
+let backendAttempted = false;
+let lastSyncAt = null;
 
 const deviceList = document.querySelector("#deviceList");
 const metricsGrid = document.querySelector("#metricsGrid");
@@ -85,6 +113,28 @@ const dashboardTitle = document.querySelector("#dashboardTitle");
 const ticketList = document.querySelector("#ticketList");
 const refreshButton = document.querySelector("#refreshData");
 const alarmButton = document.querySelector("#simulateAlarm");
+const connectionDot = document.querySelector("#connectionDot");
+const connectionState = document.querySelector("#connectionState");
+const lastSync = document.querySelector("#lastSync");
+const summaryGrid = document.querySelector("#summaryGrid");
+const ticketCount = document.querySelector("#ticketCount");
+const riskBars = document.querySelector("#riskBars");
+const riskRankStatus = document.querySelector("#riskRankStatus");
+const ackAllTickets = document.querySelector("#ackAllTickets");
+const testCloudAlarm = document.querySelector("#testCloudAlarm");
+const heroImage = document.querySelector(".hero-image");
+const hero = document.querySelector(".hero");
+const analyticsDate = document.querySelector("#analyticsDate");
+const refreshAnalytics = document.querySelector("#refreshAnalytics");
+const analyticsStatus = document.querySelector("#analyticsStatus");
+const analyticsScope = document.querySelector("#analyticsScope");
+const analyticsSummary = document.querySelector("#analyticsSummary");
+const analyticsMetrics = document.querySelector("#analyticsMetrics");
+const analyticsInsights = document.querySelector("#analyticsInsights");
+const trendChart = document.querySelector("#trendChart");
+const volumeChart = document.querySelector("#volumeChart");
+const trendStatus = document.querySelector("#trendStatus");
+const volumeStatus = document.querySelector("#volumeStatus");
 
 const configuredApiBase = (window.APP_CONFIG?.apiBaseUrl || "").replace(/\/$/, "");
 const canUseRelativeApi = location.protocol.startsWith("http") && !location.hostname.endsWith("github.io");
@@ -104,8 +154,116 @@ function modeText() {
   return backendConnected ? labels.backendOnline : labels.demoMode;
 }
 
+function formatTime(value) {
+  if (!value) return "--";
+  return new Date(value).toLocaleTimeString("zh-CN", { hour12: false });
+}
+
+function markHeroLoaded() {
+  if (!hero || !heroImage) return;
+  if (heroImage.complete) {
+    hero.classList.add("is-loaded");
+    return;
+  }
+  heroImage.addEventListener("load", () => hero.classList.add("is-loaded"), { once: true });
+}
+
+function setBackendState(isConnected) {
+  backendAttempted = true;
+  backendConnected = isConnected;
+  if (isConnected) lastSyncAt = new Date();
+}
+
 function ensureSelectedDeviceExists() {
   if (!devices[selectedDevice]) selectedDevice = 0;
+}
+
+function getSummary() {
+  const online = devices.filter((device) => device.updatedAt).length;
+  const highRisk = devices.filter((device) => Number(device.risk || 0) >= 75).length;
+  const average = devices.length ? Math.round(devices.reduce((sum, device) => sum + Number(device.risk || 0), 0) / devices.length) : 0;
+  return { online, highRisk, average };
+}
+
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function average(values) {
+  if (!values.length) return 0;
+  const total = values.reduce((sum, value) => sum + Number(value || 0), 0);
+  return Number((total / values.length).toFixed(1));
+}
+
+function buildLiveAnalytics() {
+  const metrics = metricMeta.map((metric) => {
+    const values = devices.map((device) => Number(device.values?.[metric.key] || 0));
+    return {
+      key: metric.key,
+      label: metric.label,
+      unit: metric.unit,
+      min: values.length ? Number(Math.min(...values).toFixed(1)) : 0,
+      avg: average(values),
+      max: values.length ? Number(Math.max(...values).toFixed(1)) : 0,
+    };
+  });
+  const hour = new Date().getHours();
+  const hourly = Array.from({ length: 24 }, (_, index) => ({
+    hour: index,
+    label: `${String(index).padStart(2, "0")}:00`,
+    sampleCount: index === hour ? Math.max(devices.length, 1) : 0,
+    risk: index === hour ? average(devices.map((device) => device.risk)) : 0,
+    cableTemp: index === hour ? average(devices.map((device) => device.values?.cableTemp)) : 0,
+    smoke: index === hour ? average(devices.map((device) => device.values?.smoke)) : 0,
+  }));
+  return {
+    date: analyticsDate?.value || localDateKey(),
+    scope: { name: labels.allDevices },
+    totals: {
+      sampleCount: devices.length,
+      alertCount: devices.filter((device) => device.risk >= 75).length,
+      avgRisk: average(devices.map((device) => device.risk)),
+      maxRisk: devices.reduce((max, device) => Math.max(max, Number(device.risk || 0)), 0),
+      deviceCount: devices.length,
+    },
+    metrics,
+    hourly,
+    insights: [labels.generatedFromLive],
+  };
+}
+
+function renderConnection() {
+  if (!connectionState || !connectionDot || !lastSync) return;
+  connectionDot.className = `status-dot ${backendConnected ? "online" : backendAttempted ? "offline" : ""}`;
+  connectionState.textContent = backendConnected ? labels.backendOnline : backendAttempted ? labels.backendOffline : labels.connecting;
+  lastSync.textContent = lastSyncAt ? `${labels.synced} ${formatTime(lastSyncAt)}` : labels.waiting;
+}
+
+function renderSummary() {
+  if (!summaryGrid) return;
+  const summary = getSummary();
+  const latest = devices
+    .map((device) => device.updatedAt)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  const cards = [
+    { label: labels.onlineNodes, value: `${summary.online}/${devices.length}`, tone: "green" },
+    { label: labels.highRiskNodes, value: summary.highRisk, tone: summary.highRisk ? "danger" : "green" },
+    { label: labels.avgRisk, value: summary.average, tone: riskClass(summary.average) },
+    { label: labels.lastUpdate, value: formatTime(latest || lastSyncAt), tone: "blue" },
+  ];
+  summaryGrid.innerHTML = cards
+    .map((card) => `
+      <article class="summary-card ${card.tone}">
+        <span>${card.label}</span>
+        <strong>${card.value}</strong>
+      </article>
+    `)
+    .join("");
 }
 
 function renderDevices() {
@@ -113,11 +271,11 @@ function renderDevices() {
   deviceList.innerHTML = devices
     .map((device, index) => {
       const active = index === selectedDevice ? " active" : "";
-      const updatedAt = device.updatedAt ? new Date(device.updatedAt).toLocaleTimeString("zh-CN", { hour12: false }) : "--";
+      const updatedAt = formatTime(device.updatedAt);
       return `
         <button class="device-item${active}" type="button" data-index="${index}">
           <strong>${device.name}</strong>
-          <span>${device.id} · ${device.status} · ${device.risk} · ${updatedAt}</span>
+          <span>${device.id} / ${device.status} / ${device.risk} / ${updatedAt}</span>
         </button>
       `;
     })
@@ -149,6 +307,7 @@ function renderMetrics(device) {
 }
 
 function renderTickets() {
+  if (ticketCount) ticketCount.textContent = `${tickets.length} ${labels.pendingTickets}`;
   ticketList.innerHTML = tickets
     .map((ticket) => `
       <article class="ticket ${ticket.level}">
@@ -159,6 +318,127 @@ function renderTickets() {
     .join("");
 }
 
+function renderRiskBars() {
+  if (!riskBars) return;
+  const sorted = [...devices].sort((a, b) => Number(b.risk || 0) - Number(a.risk || 0));
+  if (riskRankStatus) riskRankStatus.textContent = labels.rankReady;
+  riskBars.innerHTML = sorted
+    .map((device) => `
+      <article class="risk-bar ${riskClass(device.risk)}">
+        <div>
+          <strong>${device.name}</strong>
+          <span>${device.id} / ${device.status}</span>
+        </div>
+        <meter min="0" max="100" value="${device.risk}"></meter>
+        <b>${device.risk}</b>
+      </article>
+    `)
+    .join("");
+}
+
+function renderAnalyticsSummary(data) {
+  if (!analyticsSummary) return;
+  const totals = data.totals || {};
+  const cards = [
+    { label: labels.samples, value: totals.sampleCount || 0, tone: "blue" },
+    { label: labels.alertCount, value: totals.alertCount || 0, tone: totals.alertCount ? "danger" : "green" },
+    { label: labels.maxRisk, value: totals.maxRisk || 0, tone: riskClass(totals.maxRisk || 0) },
+    { label: labels.deviceCount, value: totals.deviceCount || 0, tone: "green" },
+  ];
+  analyticsSummary.innerHTML = cards
+    .map((card) => `
+      <article class="summary-card ${card.tone}">
+        <span>${card.label}</span>
+        <strong>${card.value}</strong>
+      </article>
+    `)
+    .join("");
+}
+
+function renderAnalyticsMetrics(data) {
+  if (!analyticsMetrics) return;
+  analyticsMetrics.innerHTML = (data.metrics || [])
+    .map((metric) => `
+      <article class="metric-row">
+        <strong>${metric.label}</strong>
+        <span>${labels.avg} ${metric.avg}${metric.unit} / ${labels.max} ${metric.max}${metric.unit} / ${labels.min} ${metric.min}${metric.unit}</span>
+      </article>
+    `)
+    .join("");
+}
+
+function renderAnalyticsInsights(data) {
+  if (!analyticsInsights) return;
+  const insights = data.insights?.length ? data.insights : [labels.noSamples];
+  analyticsInsights.innerHTML = insights.map((item) => `<p>${item}</p>`).join("");
+}
+
+function renderTrendChart(data) {
+  if (!trendChart || !volumeChart) return;
+  const hourly = data.hourly?.length ? data.hourly : buildLiveAnalytics().hourly;
+  const maxSmoke = Math.max(1, ...hourly.map((item) => Number(item.smoke || 0)));
+  const maxSamples = Math.max(1, ...hourly.map((item) => Number(item.sampleCount || 0)));
+  trendChart.innerHTML = hourly
+    .map((item) => {
+      const riskHeight = Math.max(4, Number(item.risk || 0));
+      const tempHeight = Math.max(4, Math.min(100, Number(item.cableTemp || 0) * 1.35));
+      return `
+        <div class="chart-column" title="${item.label}">
+          <span class="chart-bar risk" style="height: ${riskHeight}%"></span>
+          <span class="chart-bar temp" style="height: ${tempHeight}%"></span>
+          <small>${item.hour % 6 === 0 ? String(item.hour).padStart(2, "0") : ""}</small>
+        </div>
+      `;
+    })
+    .join("");
+  volumeChart.innerHTML = hourly
+    .map((item) => {
+      const sampleHeight = Math.max(4, (Number(item.sampleCount || 0) / maxSamples) * 100);
+      const smokeHeight = Math.max(4, (Number(item.smoke || 0) / maxSmoke) * 100);
+      return `
+        <div class="chart-column" title="${item.label}">
+          <span class="chart-bar sample" style="height: ${sampleHeight}%"></span>
+          <span class="chart-bar smoke" style="height: ${smokeHeight}%"></span>
+          <small>${item.hour % 6 === 0 ? String(item.hour).padStart(2, "0") : ""}</small>
+        </div>
+      `;
+    })
+    .join("");
+  if (trendStatus) trendStatus.textContent = data.totals?.sampleCount ? `${data.totals.avgRisk || 0}` : "--";
+  if (volumeStatus) volumeStatus.textContent = `${data.totals?.sampleCount || 0}`;
+}
+
+function renderAnalytics(data, isFallback = false) {
+  if (!analyticsStatus) return;
+  analyticsStatus.textContent = isFallback ? labels.analyticsDemo : labels.analyticsReady;
+  if (analyticsScope) analyticsScope.textContent = data.scope?.name || labels.allDevices;
+  renderAnalyticsSummary(data);
+  renderAnalyticsMetrics(data);
+  renderAnalyticsInsights(data);
+  renderTrendChart(data);
+}
+
+async function loadAnalytics() {
+  if (!analyticsDate?.value) analyticsDate.value = localDateKey();
+  if (!apiBase && apiBase !== "") {
+    renderAnalytics(buildLiveAnalytics(), true);
+    return;
+  }
+
+  try {
+    const response = await fetch(apiUrl(`/api/analytics/daily?date=${encodeURIComponent(analyticsDate.value)}`), { cache: "no-store" });
+    if (!response.ok) throw new Error("analytics unavailable");
+    const data = await response.json();
+    if (!data.totals?.sampleCount) {
+      renderAnalytics(buildLiveAnalytics(), true);
+      return;
+    }
+    renderAnalytics(data, false);
+  } catch (error) {
+    renderAnalytics(buildLiveAnalytics(), true);
+  }
+}
+
 function renderDashboard() {
   ensureSelectedDeviceExists();
   const device = devices[selectedDevice];
@@ -166,9 +446,12 @@ function renderDashboard() {
   riskPill.textContent = `${device.status} ${device.risk}`;
   riskPill.title = modeText();
   riskPill.className = `risk-pill ${riskClass(device.risk)}`;
+  renderConnection();
+  renderSummary();
   renderDevices();
   renderMetrics(device);
   renderTickets();
+  renderRiskBars();
 }
 
 function applyServerState(state) {
@@ -179,7 +462,7 @@ function applyServerState(state) {
     selectedDevice = nextIndex >= 0 ? nextIndex : 0;
   }
   if (Array.isArray(state.tickets)) tickets = state.tickets;
-  backendConnected = true;
+  setBackendState(true);
   renderDashboard();
 }
 
@@ -215,7 +498,7 @@ async function loadBackendSnapshot() {
     const [serverDevices, serverTickets] = await Promise.all([devicesResponse.json(), ticketsResponse.json()]);
     applyServerState({ devices: serverDevices.devices, tickets: serverTickets.tickets });
   } catch (error) {
-    backendConnected = false;
+    setBackendState(false);
     renderDashboard();
   }
 }
@@ -226,19 +509,66 @@ function connectEvents() {
   eventSource.addEventListener("snapshot", (event) => applyServerState(JSON.parse(event.data)));
   eventSource.addEventListener("sensor-update", (event) => applyServerState(JSON.parse(event.data)));
   eventSource.onerror = () => {
-    backendConnected = false;
+    setBackendState(false);
     eventSource.close();
     setTimeout(connectEvents, 5000);
     renderDashboard();
   };
 }
 
-refreshButton.addEventListener("click", jitterData);
-alarmButton.addEventListener("click", () => {
+async function postTestAlarm() {
+  const payload = {
+    deviceId: "D-TEST",
+    location: labels.testDevice,
+    temperature: 38.8,
+    humidity: 27,
+    cableTemp: 72.6,
+    current: 19.4,
+    leakage: 34,
+    smoke: 420,
+  };
+
+  if (!apiBase && apiBase !== "") {
+    alarmMode = true;
+    tickets = [{ level: "danger", title: labels.cloudTestLocal, desc: labels.ticketADesc }, ...demoTickets];
+    jitterData();
+    loadAnalytics();
+    return;
+  }
+
+  try {
+    const response = await fetch(apiUrl("/api/sensor-data"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error("post failed");
+    const result = await response.json();
+    applyServerState({ devices: [result.device, ...devices.filter((device) => device.id !== result.device.id)], tickets: result.tickets });
+    loadAnalytics();
+  } catch (error) {
+    alarmMode = true;
+    tickets = [{ level: "danger", title: labels.cloudTestLocal, desc: labels.ticketADesc }, ...demoTickets];
+    jitterData();
+    loadAnalytics();
+  }
+}
+
+refreshButton?.addEventListener("click", jitterData);
+alarmButton?.addEventListener("click", () => {
   alarmMode = !alarmMode;
   jitterData();
 });
+ackAllTickets?.addEventListener("click", () => {
+  tickets = [{ level: "normal", title: labels.localAckTitle, desc: labels.localAckDesc }];
+  renderDashboard();
+});
+testCloudAlarm?.addEventListener("click", postTestAlarm);
+refreshAnalytics?.addEventListener("click", loadAnalytics);
+analyticsDate?.addEventListener("change", loadAnalytics);
 
+markHeroLoaded();
 renderDashboard();
 loadBackendSnapshot();
 connectEvents();
+loadAnalytics();
