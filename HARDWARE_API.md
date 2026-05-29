@@ -28,6 +28,12 @@ POST /api/sensor-data
 Content-Type: application/json
 ```
 
+公网测试地址：
+
+```text
+POST http://81.70.232.233:3000/api/sensor-data
+```
+
 ## JSON 示例
 
 ```json
@@ -51,7 +57,7 @@ Content-Type: application/json
 
 const char* ssid = "你的WiFi名称";
 const char* password = "你的WiFi密码";
-const char* serverUrl = "http://192.168.1.23:3000/api/sensor-data";
+const char* serverUrl = "http://81.70.232.233:3000/api/sensor-data";
 
 void setup() {
   Serial.begin(115200);
