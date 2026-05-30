@@ -6,14 +6,18 @@ const { URL } = require("url");
 const port = Number(process.env.PORT || 3000);
 const rootDir = path.resolve(__dirname, "..");
 const dataDir = path.join(__dirname, "data");
+const thresholdsPath = path.join(dataDir, "thresholds.json");
+const alertsPath = path.join(dataDir, "alerts.json");
 const clients = new Set();
 const devices = new Map();
 const analyticsTimeZone = process.env.ANALYTICS_TIMEZONE || "Asia/Shanghai";
+const offlineAfterMs = Number(process.env.DEVICE_OFFLINE_AFTER_MS || 5 * 60 * 1000);
 
 fs.mkdirSync(dataDir, { recursive: true });
 
 const text = {
   high: "\u9ad8\u98ce\u9669",
+  alarm: "\u544a\u8b66",
   watch: "\u5173\u6ce8",
   normal: "\u6b63\u5e38",
   noTicketsTitle: "\u5f53\u524d\u65e0\u5f85\u5904\u7406\u544a\u8b66",
@@ -23,7 +27,22 @@ const text = {
   risk: "\u98ce\u9669",
   inspectNow: "\u8bf7\u7acb\u5373\u5de1\u68c0\u7ebf\u7f06\u6e29\u5ea6\u3001\u6f0f\u7535\u6d41\u548c\u70df\u96fe\u72b6\u6001\u3002",
   inspectSoon: "\u5efa\u8bae\u63d0\u9ad8\u5de1\u68c0\u9891\u7387\u5e76\u6838\u67e5\u8bbe\u5907\u72b6\u6001\u3002",
+  pending: "\u5f85\u5904\u7406",
+  handling: "\u5904\u7406\u4e2d",
+  resolved: "\u5df2\u5904\u7406",
 };
+
+const thresholdMeta = {
+  temperature: { label: "\u6e29\u5ea6\u9608\u503c", unit: "\u00b0C", defaultValue: 45, reason: "\u73af\u5883\u6e29\u5ea6\u8d85\u8fc7\u9608\u503c" },
+  humidityLow: { label: "\u6e7f\u5ea6\u4e0b\u9650", unit: "%", defaultValue: 28, reason: "\u76f8\u5bf9\u6e7f\u5ea6\u4f4e\u4e8e\u4e0b\u9650" },
+  cableTemp: { label: "\u7ebf\u7f06\u6e29\u5ea6\u9608\u503c", unit: "\u00b0C", defaultValue: 60, reason: "\u7ebf\u7f06\u6e29\u5ea6\u8d85\u8fc7\u9608\u503c" },
+  current: { label: "\u7535\u6d41\u9608\u503c", unit: "A", defaultValue: 16, reason: "\u8d1f\u8f7d\u7535\u6d41\u8d85\u8fc7\u9608\u503c" },
+  leakage: { label: "\u6f0f\u7535\u9608\u503c", unit: "mA", defaultValue: 30, reason: "\u6f0f\u7535\u7535\u6d41\u8d85\u8fc7\u9608\u503c" },
+  smoke: { label: "\u70df\u96fe\u9608\u503c", unit: "ppm", defaultValue: 300, reason: "\u70df\u96fe\u503c\u8d85\u8fc7\u9608\u503c" },
+};
+
+let thresholds = loadThresholds();
+let alerts = loadAlerts();
 
 const defaultDevices = [
   ["D-A01", "\u5927\u96c4\u5b9d\u6bbf\u914d\u7535\u7bb1 A \u533a"],
@@ -31,6 +50,50 @@ const defaultDevices = [
   ["D-C03", "\u5e93\u623f\u73af\u5883\u8282\u70b9"],
   ["D-D04", "\u6e38\u5ba2\u533a\u65e0\u7ebf\u8282\u70b9"],
 ];
+
+function readJsonFile(filePath, fallback) {
+  try {
+    if (!fs.existsSync(filePath)) return fallback;
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    console.error(`Failed to read ${filePath}`, error);
+    return fallback;
+  }
+}
+
+function writeJsonFile(filePath, data) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+function loadThresholds() {
+  const stored = readJsonFile(thresholdsPath, {});
+  const next = {};
+  for (const [key, meta] of Object.entries(thresholdMeta)) {
+    next[key] = number(stored[key], meta.defaultValue);
+  }
+  return next;
+}
+
+function saveThresholds(nextThresholds) {
+  thresholds = loadThresholds();
+  for (const key of Object.keys(thresholdMeta)) {
+    if (Object.prototype.hasOwnProperty.call(nextThresholds, key)) {
+      thresholds[key] = number(nextThresholds[key], thresholds[key]);
+    }
+  }
+  writeJsonFile(thresholdsPath, thresholds);
+  return thresholds;
+}
+
+function loadAlerts() {
+  const stored = readJsonFile(alertsPath, []);
+  return Array.isArray(stored) ? stored.slice(0, 200) : [];
+}
+
+function saveAlerts() {
+  alerts = alerts.slice(0, 200);
+  writeJsonFile(alertsPath, alerts);
+}
 
 for (const [id, name] of defaultDevices) {
   devices.set(id, normalizeReading({ deviceId: id, location: name }));
@@ -43,19 +106,24 @@ function number(value, fallback = 0) {
 
 function calculateRisk(values) {
   let risk = 8;
-  if (values.temperature >= 45) risk += 15;
-  if (values.humidity > 0 && values.humidity <= 28) risk += 12;
-  if (values.cableTemp >= 60) risk += 30;
-  if (values.current >= 16) risk += 18;
-  if (values.leakage >= 30) risk += 20;
-  if (values.smoke >= 300) risk += 28;
+  if (values.temperature >= thresholds.temperature) risk += 15;
+  if (values.humidity > 0 && values.humidity <= thresholds.humidityLow) risk += 12;
+  if (values.cableTemp >= thresholds.cableTemp) risk += 30;
+  if (values.current >= thresholds.current) risk += 18;
+  if (values.leakage >= thresholds.leakage) risk += 20;
+  if (values.smoke >= thresholds.smoke) risk += 28;
   return Math.min(100, risk);
 }
 
 function statusFromRisk(risk) {
-  if (risk >= 75) return text.high;
+  if (risk >= 85) return text.high;
+  if (risk >= 65) return text.alarm;
   if (risk >= 45) return text.watch;
   return text.normal;
+}
+
+function deviceOnline(updatedAt) {
+  return Boolean(updatedAt) && Date.now() - new Date(updatedAt).getTime() <= offlineAfterMs;
 }
 
 function normalizeReading(payload) {
@@ -73,14 +141,61 @@ function normalizeReading(payload) {
     smoke: number(payload.smoke, previousValues.smoke || 80),
   };
   const risk = calculateRisk(values);
+  const now = new Date().toISOString();
   return {
     id,
     name: safeName,
     status: statusFromRisk(risk),
     risk,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
+    online: true,
     values,
   };
+}
+
+function publicDevice(device) {
+  return {
+    ...device,
+    online: deviceOnline(device.updatedAt),
+  };
+}
+
+function valueForThreshold(values, key) {
+  if (key === "humidityLow") return values.humidity;
+  return values[key];
+}
+
+function thresholdExceeded(values, key, threshold) {
+  const value = valueForThreshold(values, key);
+  if (key === "humidityLow") return value > 0 && value <= threshold;
+  return value >= threshold;
+}
+
+function buildAlertReasons(reading) {
+  return Object.entries(thresholdMeta)
+    .filter(([key]) => thresholdExceeded(reading.values, key, thresholds[key]))
+    .map(([key, meta]) => {
+      const value = valueForThreshold(reading.values, key);
+      return `${meta.reason}: ${value}${meta.unit} / ${thresholds[key]}${meta.unit}`;
+    });
+}
+
+function recordAlerts(reading) {
+  const reasons = buildAlertReasons(reading);
+  if (!reasons.length) return;
+  const now = new Date().toISOString();
+  for (const reason of reasons) {
+    alerts.unshift({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      time: now,
+      deviceId: reading.id,
+      location: reading.name,
+      level: statusFromRisk(reading.risk),
+      reason,
+      status: text.pending,
+    });
+  }
+  saveAlerts();
 }
 
 function formatDateKey(dateInput = new Date()) {
@@ -269,10 +384,33 @@ function buildDailyAnalytics(records, dateKey, requestedDeviceId = "") {
   };
 }
 
+function buildHistory(deviceId = "", limit = 120) {
+  const dates = listHistoryDates().sort().reverse().slice(0, 7);
+  const records = dates.flatMap((dateKey) => readHistory(dateKey));
+  return records
+    .filter((record) => !deviceId || record.deviceId === deviceId)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    .slice(-limit);
+}
+
+function thresholdResponse() {
+  return {
+    thresholds,
+    meta: Object.fromEntries(
+      Object.entries(thresholdMeta).map(([key, meta]) => [
+        key,
+        { label: meta.label, unit: meta.unit },
+      ])
+    ),
+  };
+}
+
 function buildTickets() {
   const list = [];
   for (const device of devices.values()) {
-    if (device.risk >= 75) {
+    const publicItem = publicDevice(device);
+    if (!publicItem.online) continue;
+    if (device.risk >= 85) {
       list.push({
         level: "danger",
         title: `${device.name} ${text.highAlert}`,
@@ -294,8 +432,10 @@ function buildTickets() {
 
 function snapshot() {
   return {
-    devices: Array.from(devices.values()).sort((a, b) => b.risk - a.risk),
+    devices: Array.from(devices.values()).map(publicDevice).sort((a, b) => b.risk - a.risk),
     tickets: buildTickets(),
+    alerts: alerts.slice(0, 50),
+    thresholds,
   };
 }
 
@@ -393,6 +533,63 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/alerts") {
+    sendJson(res, 200, { alerts: alerts.slice(0, 100) });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/api/alerts/") && url.pathname.endsWith("/status")) {
+    try {
+      const alertId = decodeURIComponent(url.pathname.split("/")[3] || "");
+      const body = await readBody(req);
+      const payload = JSON.parse(body || "{}");
+      const nextStatus = String(payload.status || text.resolved);
+      const target = alerts.find((alert) => alert.id === alertId);
+      if (!target) {
+        sendJson(res, 404, { ok: false, error: "Alert not found" });
+        return;
+      }
+      target.status = nextStatus;
+      target.handledAt = new Date().toISOString();
+      saveAlerts();
+      broadcast("sensor-update", snapshot());
+      sendJson(res, 200, { ok: true, alert: target });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/history") {
+    const requestedDeviceId = String(url.searchParams.get("deviceId") || "");
+    const limit = Math.min(500, Math.max(10, Number(url.searchParams.get("limit") || 120)));
+    sendJson(res, 200, { records: buildHistory(requestedDeviceId, limit) });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/thresholds") {
+    sendJson(res, 200, thresholdResponse());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/thresholds") {
+    try {
+      const body = await readBody(req);
+      const payload = JSON.parse(body || "{}");
+      saveThresholds(payload.thresholds || payload);
+      broadcast("sensor-update", snapshot());
+      sendJson(res, 200, { ok: true, ...thresholdResponse() });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/device-config") {
+    sendJson(res, 200, thresholdResponse());
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/analytics/dates") {
     sendJson(res, 200, { dates: listHistoryDates().sort().reverse() });
     return;
@@ -426,6 +623,7 @@ const server = http.createServer(async (req, res) => {
       const reading = normalizeReading(payload);
       devices.set(reading.id, reading);
       persistReading(reading);
+      recordAlerts(reading);
       const state = snapshot();
       broadcast("sensor-update", state);
       sendJson(res, 200, { ok: true, device: reading, tickets: state.tickets });

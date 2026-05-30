@@ -318,6 +318,11 @@ button {
   color: #9d6100;
 }
 
+.risk-pill.alarm {
+  background: #fff0e8;
+  color: #b8561b;
+}
+
 .risk-pill.danger {
   background: #ffe9e5;
   color: var(--red);
@@ -626,9 +631,195 @@ button {
   border-color: rgba(216, 146, 22, 0.4);
 }
 
+.risk-bar.alarm {
+  border-color: rgba(184, 86, 27, 0.42);
+  background: #fff8f2;
+}
+
 .risk-bar.danger {
   border-color: rgba(200, 70, 48, 0.42);
   background: #fff7f5;
+}
+
+.monitor-band {
+  width: min(1440px, calc(100% - 40px));
+}
+
+.monitor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.monitor-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  padding: 18px;
+  box-shadow: none;
+}
+
+.monitor-panel.wide {
+  min-width: 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.data-table th {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.state-badge,
+.risk-tag {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.state-badge.online,
+.risk-tag.normal {
+  background: #edf7f3;
+  color: var(--green);
+}
+
+.state-badge.offline,
+.risk-tag.offline,
+.risk-tag.danger {
+  background: #ffe9e5;
+  color: var(--red);
+}
+
+.risk-tag.warning {
+  background: #fff5dd;
+  color: #9d6100;
+}
+
+.risk-tag.alarm {
+  background: #fff0e8;
+  color: #b8561b;
+}
+
+.mini-action {
+  min-height: 30px;
+  margin: 2px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--white);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.history-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.seg-button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0 12px;
+  font-weight: 800;
+}
+
+.seg-button.active {
+  border-color: var(--teal);
+  background: #e8f0ee;
+  color: var(--teal-dark);
+}
+
+.line-chart {
+  position: relative;
+  min-height: 270px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(0deg, rgba(23, 33, 38, 0.06) 1px, transparent 1px),
+    #fbfcfa;
+  background-size: 100% 25%;
+  color: var(--teal);
+}
+
+.line-chart svg {
+  position: absolute;
+  inset: 16px 16px 64px;
+  width: calc(100% - 32px);
+  height: calc(100% - 80px);
+}
+
+.chart-readout {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chart-readout strong {
+  color: var(--ink);
+  font-size: 24px;
+}
+
+.threshold-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.threshold-form label,
+.threshold-form span {
+  display: grid;
+  gap: 6px;
+}
+
+.threshold-form span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.threshold-form input {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #fbfcfa;
+  color: var(--ink);
 }
 
 .section-band {
@@ -955,6 +1146,7 @@ article p,
 
   .dashboard-shell,
   .split-layout,
+  .monitor-grid,
   .analytics-grid,
   .chart-stack,
   .app-layout {

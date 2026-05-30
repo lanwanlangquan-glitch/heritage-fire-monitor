@@ -1,7 +1,10 @@
 const labels = {
   high: "\u9ad8\u98ce\u9669",
+  alarm: "\u544a\u8b66",
   watch: "\u5173\u6ce8",
   normal: "\u6b63\u5e38",
+  online: "\u5728\u7ebf",
+  offline: "\u79bb\u7ebf",
   backendOnline: "\u771f\u5b9e\u540e\u7aef\u5728\u7ebf",
   demoMode: "\u6f14\u793a\u6570\u636e\u6a21\u5f0f",
   backendOffline: "\u540e\u7aef\u672a\u8fde\u63a5\uff0c\u5df2\u5207\u6362\u6f14\u793a\u6570\u636e",
@@ -26,6 +29,21 @@ const labels = {
   min: "\u6700\u5c0f",
   max: "\u6700\u5927",
   generatedFromLive: "\u5df2\u7528\u5f53\u524d\u5b9e\u65f6\u6570\u636e\u751f\u6210\u9884\u89c8\u62a5\u544a\u3002",
+  devices: "\u8bbe\u5907",
+  alerts: "\u544a\u8b66",
+  noAlerts: "\u6682\u65e0\u544a\u8b66\u8bb0\u5f55",
+  pending: "\u5f85\u5904\u7406",
+  handling: "\u5904\u7406\u4e2d",
+  resolved: "\u5df2\u5904\u7406",
+  markHandling: "\u5904\u7406\u4e2d",
+  markResolved: "\u5df2\u5904\u7406",
+  thresholdSaved: "\u9608\u503c\u5df2\u4fdd\u5b58",
+  thresholdLocal: "\u672c\u5730\u9608\u503c\u9884\u89c8",
+  historyReady: "\u5386\u53f2\u6570\u636e",
+  historyFallback: "\u6682\u7528\u5b9e\u65f6\u6570\u636e",
+  noHistory: "\u6682\u65e0\u5386\u53f2\u6570\u636e",
+  temperature: "\u6e29\u5ea6",
+  leakage: "\u6f0f\u7535",
   localAckTitle: "\u672c\u5730\u544a\u8b66\u5df2\u786e\u8ba4",
   localAckDesc: "\u9875\u9762\u5df2\u6682\u65f6\u6536\u8d77\u544a\u8b66\uff0c\u771f\u5b9e\u540e\u7aef\u6570\u636e\u4e0b\u6b21\u540c\u6b65\u540e\u4f1a\u6062\u590d\u3002",
   cloudTestLocal: "\u5df2\u5728\u672c\u5730\u751f\u6210\u6d4b\u8bd5\u544a\u8b66",
@@ -55,6 +73,7 @@ const demoDevices = [
     name: labels.deviceA,
     status: labels.high,
     risk: 82,
+    online: true,
     updatedAt: new Date().toISOString(),
     values: { temperature: 31.8, humidity: 36, cableTemp: 68.4, current: 18.6, leakage: 31, smoke: 386 },
   },
@@ -63,6 +82,7 @@ const demoDevices = [
     name: labels.deviceB,
     status: labels.watch,
     risk: 58,
+    online: true,
     updatedAt: new Date().toISOString(),
     values: { temperature: 29.4, humidity: 32, cableTemp: 41.2, current: 5.8, leakage: 8, smoke: 172 },
   },
@@ -71,6 +91,7 @@ const demoDevices = [
     name: labels.deviceC,
     status: labels.normal,
     risk: 24,
+    online: true,
     updatedAt: new Date().toISOString(),
     values: { temperature: 25.1, humidity: 48, cableTemp: 30.6, current: 1.4, leakage: 3, smoke: 86 },
   },
@@ -79,6 +100,7 @@ const demoDevices = [
     name: labels.deviceD,
     status: labels.normal,
     risk: 31,
+    online: true,
     updatedAt: new Date().toISOString(),
     values: { temperature: 26.3, humidity: 45, cableTemp: 34.5, current: 3.2, leakage: 5, smoke: 104 },
   },
@@ -105,6 +127,9 @@ let alarmMode = false;
 let backendConnected = false;
 let backendAttempted = false;
 let lastSyncAt = null;
+let alertRecords = [];
+let thresholds = { temperature: 45, smoke: 300, current: 16, cableTemp: 60 };
+let historyMetric = "temperature";
 
 const deviceList = document.querySelector("#deviceList");
 const metricsGrid = document.querySelector("#metricsGrid");
@@ -135,6 +160,16 @@ const trendChart = document.querySelector("#trendChart");
 const volumeChart = document.querySelector("#volumeChart");
 const trendStatus = document.querySelector("#trendStatus");
 const volumeStatus = document.querySelector("#volumeStatus");
+const refreshMonitor = document.querySelector("#refreshMonitor");
+const deviceStatusCount = document.querySelector("#deviceStatusCount");
+const deviceStatusTable = document.querySelector("#deviceStatusTable");
+const alertRecordCount = document.querySelector("#alertRecordCount");
+const alertRecordTable = document.querySelector("#alertRecordTable");
+const historyStatus = document.querySelector("#historyStatus");
+const historyChart = document.querySelector("#historyChart");
+const historyMetricButtons = document.querySelectorAll("[data-history-metric]");
+const thresholdStatus = document.querySelector("#thresholdStatus");
+const thresholdForm = document.querySelector("#thresholdForm");
 
 const configuredApiBase = (window.APP_CONFIG?.apiBaseUrl || "").replace(/\/$/, "");
 const canUseRelativeApi = location.protocol.startsWith("http") && !location.hostname.endsWith("github.io");
@@ -145,9 +180,19 @@ function apiUrl(path) {
 }
 
 function riskClass(risk) {
-  if (risk >= 75) return "danger";
+  if (risk >= 85) return "danger";
+  if (risk >= 65) return "alarm";
   if (risk >= 45) return "warning";
   return "normal";
+}
+
+function riskLevel(device) {
+  if (!device?.online) return labels.offline;
+  const risk = Number(device.risk || 0);
+  if (risk >= 85) return labels.high;
+  if (risk >= 65) return labels.alarm;
+  if (risk >= 45) return labels.watch;
+  return labels.normal;
 }
 
 function modeText() {
@@ -157,6 +202,11 @@ function modeText() {
 function formatTime(value) {
   if (!value) return "--";
   return new Date(value).toLocaleTimeString("zh-CN", { hour12: false });
+}
+
+function formatDateTime(value) {
+  if (!value) return "--";
+  return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }
 
 function markHeroLoaded() {
@@ -336,6 +386,129 @@ function renderRiskBars() {
     .join("");
 }
 
+function renderDeviceStatusTable() {
+  if (!deviceStatusTable) return;
+  if (deviceStatusCount) deviceStatusCount.textContent = `${devices.length} ${labels.devices}`;
+  deviceStatusTable.innerHTML = devices
+    .map((device) => {
+      const state = device.online ? labels.online : labels.offline;
+      const tone = device.online ? riskClass(device.risk) : "offline";
+      return `
+        <tr>
+          <td><span class="state-badge ${device.online ? "online" : "offline"}">${state}</span></td>
+          <td>${device.id}</td>
+          <td>${device.name}</td>
+          <td>${formatDateTime(device.updatedAt)}</td>
+          <td><span class="risk-tag ${tone}">${riskLevel(device)}</span></td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function renderAlertRecords() {
+  if (!alertRecordTable) return;
+  if (alertRecordCount) alertRecordCount.textContent = `${alertRecords.length} ${labels.alerts}`;
+  if (!alertRecords.length) {
+    alertRecordTable.innerHTML = `
+      <tr>
+        <td colspan="5">${labels.noAlerts}</td>
+      </tr>
+    `;
+    return;
+  }
+  alertRecordTable.innerHTML = alertRecords
+    .map((alert) => `
+      <tr>
+        <td>${formatDateTime(alert.time)}</td>
+        <td>${alert.location || alert.deviceId}</td>
+        <td>${alert.reason}</td>
+        <td><span class="state-badge ${alert.status === labels.resolved ? "online" : "offline"}">${alert.status || labels.pending}</span></td>
+        <td>
+          <button class="mini-action" type="button" data-alert-id="${alert.id}" data-next-status="${labels.handling}">${labels.markHandling}</button>
+          <button class="mini-action" type="button" data-alert-id="${alert.id}" data-next-status="${labels.resolved}">${labels.markResolved}</button>
+        </td>
+      </tr>
+    `)
+    .join("");
+
+  alertRecordTable.querySelectorAll("[data-alert-id]").forEach((button) => {
+    button.addEventListener("click", () => updateAlertStatus(button.dataset.alertId, button.dataset.nextStatus));
+  });
+}
+
+function historyLabel(metric) {
+  return {
+    temperature: labels.temperature,
+    humidity: labels.humidity,
+    smoke: labels.smoke,
+    current: labels.current,
+  }[metric] || metric;
+}
+
+function historyUnit(metric) {
+  return {
+    temperature: "\u00b0C",
+    humidity: "%",
+    smoke: "ppm",
+    current: "A",
+  }[metric] || "";
+}
+
+function buildLiveHistoryRecords() {
+  return devices.map((device, index) => ({
+    timestamp: device.updatedAt || new Date(Date.now() - (devices.length - index) * 60000).toISOString(),
+    deviceId: device.id,
+    name: device.name,
+    values: device.values || {},
+  }));
+}
+
+function renderHistoryChart(records, isFallback = false) {
+  if (!historyChart) return;
+  if (historyStatus) historyStatus.textContent = isFallback ? labels.historyFallback : `${historyLabel(historyMetric)} ${labels.historyReady}`;
+  const data = (records?.length ? records : buildLiveHistoryRecords()).slice(-60);
+  if (!data.length) {
+    historyChart.innerHTML = `<p>${labels.noHistory}</p>`;
+    return;
+  }
+  const values = data.map((record) => Number(record.values?.[historyMetric] || 0));
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const span = Math.max(max - min, 1);
+  const points = values
+    .map((value, index) => {
+      const x = data.length === 1 ? 0 : (index / (data.length - 1)) * 100;
+      const y = 92 - ((value - min) / span) * 82;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  historyChart.innerHTML = `
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img">
+      <polyline points="${points}" fill="none" stroke="currentColor" stroke-width="2.6" vector-effect="non-scaling-stroke"></polyline>
+    </svg>
+    <div class="chart-readout">
+      <span>${historyLabel(historyMetric)}</span>
+      <strong>${values.at(-1) || 0}${historyUnit(historyMetric)}</strong>
+      <span>${labels.min} ${min}${historyUnit(historyMetric)} / ${labels.max} ${max}${historyUnit(historyMetric)}</span>
+    </div>
+  `;
+}
+
+function renderThresholdForm() {
+  if (!thresholdForm) return;
+  Object.entries(thresholds).forEach(([key, value]) => {
+    const input = thresholdForm.elements[key];
+    if (input) input.value = value;
+  });
+}
+
+function renderMonitor() {
+  renderDeviceStatusTable();
+  renderAlertRecords();
+  renderThresholdForm();
+}
+
 function renderAnalyticsSummary(data) {
   if (!analyticsSummary) return;
   const totals = data.totals || {};
@@ -439,6 +612,116 @@ async function loadAnalytics() {
   }
 }
 
+async function loadAlerts() {
+  if (!apiBase && apiBase !== "") {
+    alertRecords = demoTickets.map((ticket, index) => ({
+      id: `demo-${index}`,
+      time: new Date(Date.now() - index * 600000).toISOString(),
+      location: devices[index]?.name || labels.deviceA,
+      reason: ticket.title,
+      status: index === 2 ? labels.resolved : labels.pending,
+    }));
+    renderAlertRecords();
+    return;
+  }
+  try {
+    const response = await fetch(apiUrl("/api/alerts"), { cache: "no-store" });
+    if (!response.ok) throw new Error("alerts unavailable");
+    const data = await response.json();
+    alertRecords = data.alerts || [];
+    renderAlertRecords();
+  } catch (error) {
+    alertRecords = [];
+    renderAlertRecords();
+  }
+}
+
+async function loadThresholds() {
+  if (!apiBase && apiBase !== "") {
+    renderThresholdForm();
+    if (thresholdStatus) thresholdStatus.textContent = labels.thresholdLocal;
+    return;
+  }
+  try {
+    const response = await fetch(apiUrl("/api/thresholds"), { cache: "no-store" });
+    if (!response.ok) throw new Error("thresholds unavailable");
+    const data = await response.json();
+    thresholds = { ...thresholds, ...(data.thresholds || {}) };
+    renderThresholdForm();
+    if (thresholdStatus) thresholdStatus.textContent = "Server config";
+  } catch (error) {
+    renderThresholdForm();
+    if (thresholdStatus) thresholdStatus.textContent = labels.thresholdLocal;
+  }
+}
+
+async function loadHistory() {
+  const selectedId = devices[selectedDevice]?.id || "";
+  if (!apiBase && apiBase !== "") {
+    renderHistoryChart(buildLiveHistoryRecords(), true);
+    return;
+  }
+  try {
+    const response = await fetch(apiUrl(`/api/history?deviceId=${encodeURIComponent(selectedId)}&limit=120`), { cache: "no-store" });
+    if (!response.ok) throw new Error("history unavailable");
+    const data = await response.json();
+    renderHistoryChart(data.records || [], !(data.records || []).length);
+  } catch (error) {
+    renderHistoryChart(buildLiveHistoryRecords(), true);
+  }
+}
+
+async function loadMonitor() {
+  await Promise.all([loadAlerts(), loadThresholds(), loadHistory()]);
+  renderMonitor();
+}
+
+async function updateAlertStatus(alertId, status) {
+  if (!alertId) return;
+  if (!apiBase && apiBase !== "") {
+    alertRecords = alertRecords.map((alert) => (alert.id === alertId ? { ...alert, status } : alert));
+    renderAlertRecords();
+    return;
+  }
+  try {
+    await fetch(apiUrl(`/api/alerts/${encodeURIComponent(alertId)}/status`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    await loadAlerts();
+  } catch (error) {
+    await loadAlerts();
+  }
+}
+
+async function saveThresholdForm(event) {
+  event.preventDefault();
+  const formData = new FormData(thresholdForm);
+  const next = Object.fromEntries([...formData.entries()].map(([key, value]) => [key, Number(value)]));
+  thresholds = { ...thresholds, ...next };
+  if (!apiBase && apiBase !== "") {
+    if (thresholdStatus) thresholdStatus.textContent = labels.thresholdLocal;
+    renderDashboard();
+    return;
+  }
+  try {
+    const response = await fetch(apiUrl("/api/thresholds"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thresholds: next }),
+    });
+    if (!response.ok) throw new Error("save threshold failed");
+    const data = await response.json();
+    thresholds = { ...thresholds, ...(data.thresholds || {}) };
+    if (thresholdStatus) thresholdStatus.textContent = labels.thresholdSaved;
+    renderThresholdForm();
+    loadBackendSnapshot();
+  } catch (error) {
+    if (thresholdStatus) thresholdStatus.textContent = labels.thresholdLocal;
+  }
+}
+
 function renderDashboard() {
   ensureSelectedDeviceExists();
   const device = devices[selectedDevice];
@@ -452,6 +735,7 @@ function renderDashboard() {
   renderMetrics(device);
   renderTickets();
   renderRiskBars();
+  renderMonitor();
 }
 
 function applyServerState(state) {
@@ -462,6 +746,8 @@ function applyServerState(state) {
     selectedDevice = nextIndex >= 0 ? nextIndex : 0;
   }
   if (Array.isArray(state.tickets)) tickets = state.tickets;
+  if (Array.isArray(state.alerts)) alertRecords = state.alerts;
+  if (state.thresholds) thresholds = { ...thresholds, ...state.thresholds };
   setBackendState(true);
   renderDashboard();
 }
@@ -566,9 +852,19 @@ ackAllTickets?.addEventListener("click", () => {
 testCloudAlarm?.addEventListener("click", postTestAlarm);
 refreshAnalytics?.addEventListener("click", loadAnalytics);
 analyticsDate?.addEventListener("change", loadAnalytics);
+refreshMonitor?.addEventListener("click", loadMonitor);
+thresholdForm?.addEventListener("submit", saveThresholdForm);
+historyMetricButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    historyMetric = button.dataset.historyMetric || "temperature";
+    historyMetricButtons.forEach((item) => item.classList.toggle("active", item === button));
+    loadHistory();
+  });
+});
 
 markHeroLoaded();
 renderDashboard();
 loadBackendSnapshot();
 connectEvents();
 loadAnalytics();
+loadMonitor();
